@@ -136,7 +136,7 @@ FROM base AS app
 
 WORKDIR "${RT_MINER_DIR}"
 COPY --chown=${UID}:${GID} ./src .
-COPY --chown=${UID}:${GID} --chmod=770 ./neurons/miner/scripts/docker/*.sh /usr/local/bin/
+COPY --chown=${UID}:${GID} --chmod=770 ./scripts/docker/*.sh /usr/local/bin/
 
 # VOLUME ["${RT_MINER_DATA_DIR}"]
 
