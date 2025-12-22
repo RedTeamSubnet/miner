@@ -1,8 +1,4 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
 import os
-import time
 import yaml
 import pickle
 from typing import Tuple
@@ -52,7 +48,7 @@ class Miner(BaseMiner):
             pickle.dump(self.synapse_commit, f)
 
     def _load_active_commit(self) -> list:
-        commit_file = "neurons/miner/active_commit.yaml"
+        commit_file = "active_commit.yaml"
         commits = yaml.load(open(commit_file), yaml.FullLoader)
         if commits is None:
             return []
@@ -89,8 +85,6 @@ class Miner(BaseMiner):
         return valid_commits
 
 
-if __name__ == "__main__":
-    with Miner() as miner:
-        while True:
-            bt.logging.info("Miner is running.")
-            time.sleep(10)
+__all__ = [
+    "Miner",
+]

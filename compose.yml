@@ -1,0 +1,26 @@
+services:
+  agent-miner:
+    image: redteamsubnet61/agent-miner:latest
+    build:
+      context: .
+    restart: unless-stopped
+    environment:
+      TERM: ${TERM:-xterm}
+      TZ: ${TZ:-UTC}
+      RT_MINER_PORT: ${RT_MINER_PORT:-47920}
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - "sidecar-btcli-data:${RT_BTCLI_DATA_DIR:-/var/lib/sidecar-btcli}"
+      - "agent-miner-logs:${RT_MINER_LOGS_DIR:-/var/log/agent-miner}"
+      - "agent-miner-data:${RT_MINER_DATA_DIR:-/var/lib/agent-miner}"
+    ports:
+      - "${RT_MINER_PORT:-8088}:${RT_MINER_PORT:-8088}"
+    tty: true
+
+
+volumes:
+  sidecar-btcli-data:
+  agent-miner-logs:
+  agent-miner-data:
