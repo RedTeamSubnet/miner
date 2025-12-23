@@ -1,6 +1,6 @@
 services:
   agent-miner:
-    image: redteamsubnet61/agent-miner:latest
+    image: redteamsubnet61/agent-miner:1.1.0-251215
     build:
       context: .
     restart: unless-stopped
@@ -12,15 +12,9 @@ services:
       - path: .env
         required: false
     volumes:
-      - "sidecar-btcli-data:${RT_BTCLI_DATA_DIR:-/var/lib/sidecar-btcli}"
-      - "agent-miner-logs:${RT_MINER_LOGS_DIR:-/var/log/agent-miner}"
-      - "agent-miner-data:${RT_MINER_DATA_DIR:-/var/lib/agent-miner}"
+      - "./volumes/storage/sidecar-btcli/data:/var/lib/sidecar-btcli"
+      - "./volumes/storage/agent-miner/logs:/var/log/agent-miner"
+      - "./volumes/storage/agent-miner/data:/var/lib/agent-miner"
     ports:
       - "${RT_MINER_PORT:-8088}:${RT_MINER_PORT:-8088}"
     tty: true
-
-
-volumes:
-  sidecar-btcli-data:
-  agent-miner-logs:
-  agent-miner-data:
