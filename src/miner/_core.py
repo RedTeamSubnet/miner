@@ -4,8 +4,9 @@ import pickle
 from typing import Tuple
 
 import bittensor as bt
+from redteam_core import Commit, constants
 
-from redteam_core import BaseMiner, Commit, constants
+from ._base import BaseMiner
 
 
 class Miner(BaseMiner):
