@@ -10,10 +10,13 @@ import bittensor as bt
 from redteam_core.protocol import Commit
 from redteam_core import MainConfig
 
+from config import MinerMainConfig
+
 
 class BaseMiner(ABC):
     def __init__(self):
         self.config = MainConfig()
+        self.miner_config: MinerMainConfig = MinerMainConfig()
         self.setup_logging()
         self.setup_bittensor_objects()
         self.axon.attach(self.forward, self.blacklist)
@@ -22,26 +25,32 @@ class BaseMiner(ABC):
     def setup_logging(self):
         bt.logging.enable_default()
         bt.logging.enable_info()
-        if self.config.logging.debug:
+        if self.config.BITTENSOR.LOGGING.LEVEL == "DEBUG":
             bt.logging.enable_debug()
-        if self.config.logging.trace:
+        elif self.config.BITTENSOR.LOGGING.LEVEL == "TRACE":
             bt.logging.enable_trace()
-        bt.logging(config=self.config)
         bt.logging.info(
-            f"Running miner for subnet: {self.config.netuid} on network: {self.config.subtensor.network} with config:"
+            f"Running miner for subnet:  {self.config.BITTENSOR.SUBNET.NETUID} on network: {self.config.BITTENSOR.SUBTENSOR_NETWORK} with config:"
         )
-        bt.logging.info(self.config)
+        bt.logging.info(self.config.model_dump_json())
 
     def setup_bittensor_objects(self):
         bt.logging.info("Setting up Bittensor objects.")
-        self.wallet = bt.wallet(config=self.config)
+
+        bt_config = self._create_bittensor_config()
+
+        self.wallet = bt.wallet(config=bt_config)
         bt.logging.info(f"Wallet: {self.wallet}")
-        self.subtensor = bt.subtensor(config=self.config)
+
+        self.subtensor = bt.subtensor(config=bt_config)
         bt.logging.info(f"Subtensor: {self.subtensor}")
+
         self.dendrite = bt.dendrite(wallet=self.wallet)
         bt.logging.info(f"Dendrite: {self.dendrite}")
+
         self.metagraph = self.subtensor.metagraph(self.config.netuid)
         bt.logging.info(f"Metagraph: {self.metagraph}")
+
         self.axon = bt.axon(
             wallet=self.wallet, config=self.config, port=self.config.axon.port
         )
@@ -66,9 +75,11 @@ class BaseMiner(ABC):
         # Serve passes the axon information to the network + netuid we are hosting on.
         # This will auto-update if the axon port of external ip have changed.
         bt.logging.info(
-            f"Serving miner axon {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
+            f"Serving miner axon {self.axon} on network: {self.config.BITTENSOR.SUBTENSOR_NETWORK} with netuid: {self.config.BITTENSOR.SUBNET.NETUID}"
         )
-        self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor)
+        self.axon.serve(
+            netuid=self.config.BITTENSOR.SUBNET.NETUID, subtensor=self.subtensor
+        )
 
         # Start  starts the miner's axon, making it active on the network.
         self.axon.start()
@@ -152,6 +163,35 @@ class BaseMiner(ABC):
         active_challenges = list(active_challenges.keys())
         bt.logging.info(f"Active challenges: {active_challenges}")
         return active_challenges
+
+    def _create_bittensor_config(self) -> bt.Config:
+        """
+        Create a Bittensor Config object from MainConfig.
+
+        Maps the hierarchical MainConfig structure to Bittensor's expected Config format.
+
+        Returns:
+            bt.Config: Bittensor configuration object
+        """
+        bt_config = bt.Config()
+        # Set wallet configuration
+        bt_config.wallet.name = self.miner_config.WALLET_NAME
+        bt_config.wallet.hotkey = self.miner_config.HOTKEY_NAME
+
+        # Set subtensor configuration
+        bt_config.subtensor.network = self.config.BITTENSOR.SUBTENSOR_NETWORK
+
+        # Set axon configuration
+        bt_config.axon.port = self.config.BITTENSOR.AXON_PORT
+
+        # Set logging configuration
+        bt_config.logging.logging_dir = self.config.BITTENSOR.LOGGING.DIR
+        bt_config.logging.logging_level = self.config.BITTENSOR.LOGGING.LEVEL
+
+        # Set netuid (subnet configuration)
+        bt_config.netuid = self.config.BITTENSOR.SUBNET.NETUID
+
+        return bt_config
 
     @abstractmethod
     def forward(self, synapse: Commit) -> Commit: ...
