@@ -1,16 +1,18 @@
+import os
 import pathlib
 import time
 import threading
 from abc import ABC, abstractmethod
 from typing import Tuple
 
+import requests
 import yaml
 import bittensor as bt
 
 from redteam_core.protocol import Commit
 from redteam_core import MainConfig
 
-from config import MinerMainConfig
+from .config import MinerMainConfig
 
 
 class BaseMiner(ABC):
@@ -48,12 +50,10 @@ class BaseMiner(ABC):
         self.dendrite = bt.dendrite(wallet=self.wallet)
         bt.logging.info(f"Dendrite: {self.dendrite}")
 
-        self.metagraph = self.subtensor.metagraph(self.config.netuid)
+        self.metagraph = self.subtensor.metagraph(self.config.BITTENSOR.SUBNET.NETUID)
         bt.logging.info(f"Metagraph: {self.metagraph}")
 
-        self.axon = bt.axon(
-            wallet=self.wallet, config=self.config, port=self.config.axon.port
-        )
+        self.axon = bt.axon(wallet=self.wallet, port=self.miner_config.AXON_PORT)
         bt.logging.info(f"Axon: {self.axon}")
 
         if self.wallet.hotkey.ss58_address not in self.metagraph.hotkeys:
@@ -153,13 +153,9 @@ class BaseMiner(ABC):
         self.stop_run_thread()
 
     def _get_active_challenges(self):
-        active_challenges_path = (
-            pathlib.Path(__file__).parent.parent
-            / "challenge_pool"
-            / "active_challenges.yaml"
-        )
-        with open(active_challenges_path, "r") as f:
-            active_challenges = yaml.load(f, yaml.FullLoader)
+        active_challenges_path = "https://raw.githubusercontent.com/RedTeamSubnet/RedTeam/refs/heads/main/redteam_core/challenge_pool/active_challenges.yaml"
+        response = requests.get(active_challenges_path)
+        active_challenges = yaml.load(response.text, yaml.FullLoader)
         active_challenges = list(active_challenges.keys())
         bt.logging.info(f"Active challenges: {active_challenges}")
         return active_challenges
@@ -175,18 +171,19 @@ class BaseMiner(ABC):
         """
         bt_config = bt.Config()
         # Set wallet configuration
+        if bt_config.wallet is None:
+            bt_config.wallet = bt.Config()
+
+        bt_config.wallet.path = str(
+            os.getenv("RT_BTCLI_WALLET_DIR", "~/.bittensor/wallets")
+        )
         bt_config.wallet.name = self.miner_config.WALLET_NAME
         bt_config.wallet.hotkey = self.miner_config.HOTKEY_NAME
 
+        if bt_config.subtensor is None:
+            bt_config.subtensor = bt.Config()
         # Set subtensor configuration
         bt_config.subtensor.network = self.config.BITTENSOR.SUBTENSOR_NETWORK
-
-        # Set axon configuration
-        bt_config.axon.port = self.config.BITTENSOR.AXON_PORT
-
-        # Set logging configuration
-        bt_config.logging.logging_dir = self.config.BITTENSOR.LOGGING.DIR
-        bt_config.logging.logging_level = self.config.BITTENSOR.LOGGING.LEVEL
 
         # Set netuid (subnet configuration)
         bt_config.netuid = self.config.BITTENSOR.SUBNET.NETUID
