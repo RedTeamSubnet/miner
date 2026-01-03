@@ -36,7 +36,7 @@ class Miner(BaseMiner):
         return False, "Passed"
 
     def _load_synapse_commit(self) -> Commit:
-        commit_file = self.config.neuron.fullpath + "/commit.pkl"
+        commit_file = self.miner_config.COMMIT_STORAGE_DIR + "/commit.pkl"
         if not os.path.exists(commit_file):
             return Commit()
         with open(commit_file, "rb") as f:
@@ -44,7 +44,8 @@ class Miner(BaseMiner):
         return commit
 
     def _save_synapse_commit(self):
-        commit_file = self.config.neuron.fullpath + "/commit.pkl"
+        commit_file = self.miner_config.COMMIT_STORAGE_DIR + "/commit.pkl"
+        os.makedirs(self.miner_config.COMMIT_STORAGE_DIR, exist_ok=True)
         with open(commit_file, "wb") as f:
             pickle.dump(self.synapse_commit, f)
 

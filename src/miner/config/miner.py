@@ -16,6 +16,10 @@ class MinerMainConfig(BaseConfig):
         default=None,
         description="SS58 address of the hotkey to use for mining (overrides HOTKEY_NAME if set)",
     )
+    COMMIT_STORAGE_DIR: str = Field(
+        default="~/.redteam/miner/commits",
+        description="Path to store commit data for the miner",
+    )
     model_config = SettingsConfigDict(env_prefix=ENV_PREFIX_MINER)
 
 
