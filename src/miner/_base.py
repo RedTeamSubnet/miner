@@ -32,7 +32,7 @@ class BaseMiner(ABC):
         elif self.config.BITTENSOR.LOGGING_LEVEL == "TRACE":
             bt.logging.enable_trace()
         bt.logging.info(
-            f"Running miner for subnet:  {self.config.BITTENSOR.SUBNET.NETUID} on network: {self.config.BITTENSOR.SUBTENSOR_NETWORK} with config:"
+            f"Running miner for subnet:  {self.config.BITTENSOR.SUBNET_NETUID} on network: {self.config.BITTENSOR.SUBTENSOR_NETWORK} with config:"
         )
         bt.logging.info(self.config.model_dump_json())
 
@@ -50,7 +50,7 @@ class BaseMiner(ABC):
         self.dendrite = bt.dendrite(wallet=self.wallet)
         bt.logging.info(f"Dendrite: {self.dendrite}")
 
-        self.metagraph = self.subtensor.metagraph(self.config.BITTENSOR.SUBNET.NETUID)
+        self.metagraph = self.subtensor.metagraph(self.config.BITTENSOR.SUBNET_NETUID)
         bt.logging.info(f"Metagraph: {self.metagraph}")
 
         self.axon = bt.axon(wallet=self.wallet, port=self.miner_config.AXON_PORT)
@@ -75,10 +75,10 @@ class BaseMiner(ABC):
         # Serve passes the axon information to the network + netuid we are hosting on.
         # This will auto-update if the axon port of external ip have changed.
         bt.logging.info(
-            f"Serving miner axon {self.axon} on network: {self.config.BITTENSOR.SUBTENSOR_NETWORK} with netuid: {self.config.BITTENSOR.SUBNET.NETUID}"
+            f"Serving miner axon {self.axon} on network: {self.config.BITTENSOR.SUBTENSOR_NETWORK} with netuid: {self.config.BITTENSOR.SUBNET_NETUID}"
         )
         self.axon.serve(
-            netuid=self.config.BITTENSOR.SUBNET.NETUID, subtensor=self.subtensor
+            netuid=self.config.BITTENSOR.SUBNET_NETUID, subtensor=self.subtensor
         )
 
         # Start  starts the miner's axon, making it active on the network.
@@ -186,7 +186,7 @@ class BaseMiner(ABC):
         bt_config.subtensor.network = self.config.BITTENSOR.SUBTENSOR_NETWORK
 
         # Set netuid (subnet configuration)
-        bt_config.netuid = self.config.BITTENSOR.SUBNET.NETUID
+        bt_config.netuid = self.config.BITTENSOR.SUBNET_NETUID
 
         return bt_config
 
