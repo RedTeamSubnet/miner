@@ -1,4 +1,5 @@
 import os
+import pathlib
 import yaml
 import pickle
 from typing import Tuple
@@ -50,7 +51,8 @@ class Miner(BaseMiner):
             pickle.dump(self.synapse_commit, f)
 
     def _load_active_commit(self) -> list:
-        commit_file = "active_commit.yaml"
+        _current_path = pathlib.Path(__file__).parent.resolve()
+        commit_file = _current_path / "active_commit.yaml"
         commits = yaml.load(open(commit_file), yaml.FullLoader)
         if commits is None:
             return []
