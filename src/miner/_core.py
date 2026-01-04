@@ -5,7 +5,7 @@ import pickle
 from typing import Tuple
 
 import bittensor as bt
-from redteam_core import Commit, constants
+from redteam_core import Commit
 
 from ._base import BaseMiner
 
@@ -32,7 +32,7 @@ class Miner(BaseMiner):
         hotkey = synapse.dendrite.hotkey
         uid = self.metagraph.hotkeys.index(hotkey)
         stake = self.metagraph.S[uid]
-        if stake < constants.MIN_VALIDATOR_STAKE:
+        if stake < self.config.MIN_VALIDATOR_STAKE:
             return True, "Not enough stake"
         return False, "Passed"
 
