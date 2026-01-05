@@ -7,7 +7,7 @@ services:
     environment:
       TERM: ${TERM:-xterm}
       TZ: ${TZ:-UTC}
-      RT_MINER_PORT: ${RT_MINER_PORT:-47920}
+      RT_MINER_AXON_PORT: ${RT_MINER_AXON_PORT:-8091}
     env_file:
       - path: .env
         required: false
@@ -16,5 +16,5 @@ services:
       - "./volumes/storage/agent-miner/logs:/var/log/agent-miner"
       - "./volumes/storage/agent-miner/data:/var/lib/agent-miner"
     ports:
-      - "${RT_MINER_PORT:-8088}:${RT_MINER_PORT:-8088}"
+      - "${RT_MINER_AXON_PORT:-8091}:${RT_MINER_AXON_PORT:-8091}"
     tty: true
