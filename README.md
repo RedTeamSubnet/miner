@@ -71,7 +71,7 @@ git clone git@github.com:RedTeamSubnet/miner.git && \
 2. Extract it into the projects directory.
 3. Enter into the extracted project directory.
 
-### 3. Prepare active commit file
+### 3. 🔧 Configure active commit file
 
 **[IMPORTANT]** Make sure to change the **commit hash** to your own value in the **`active_commit.yaml`** file:
 
@@ -160,6 +160,18 @@ RT_MINER_HOTKEY_NAME="default" # !!! CHANGE THIS TO REAL MINER HOTKEY NAME !!!
 RT_MINER_AXON_PORT=8091
 # RT_MINER_LOGS_DIR="/var/log/agent-miner"
 # RT_MINER_DATA_DIR="/var/lib/agent-miner"
+```
+
+### 🔧 Active commit file
+
+[**`active_commit.yaml`**](./volumes/configs/agent-miner/active_commit.yaml):
+
+```yaml
+# - text_detection---vietbeu/text-detection-miner@sha256:7be64b1a0b938951c6361195c58299540a21ff4ac8c34e5cc18bcae634e254b0
+# - webui_auto---asadbekk/rest.rt-wu-miner@sha256:b8cd274c0fbb4b30b98274465424025a8b0d070c9cca4e80e0d79f69f49a5c17
+- response_quality_adversarial_v2---bangbang123/response_quality_adversarial@sha256:a5fff733d574ae0c9c93d9029a7fc2aaaeeac07793fb6ef4683236579f1bf857
+- ada_detection_v1---vietbeu/response_quality_ranker@sha256:5b468ec48eae57907f1ba91de12bfe78f709351b0421e14a3b105dcb00844103
+- ab_sniffer_v5---asadbey/rest.rt-hb-v1-miner@sha256:f84f4d5a179908214121e071906357ddbfaee30fb6da2e896d404fc00acd20e3
 ```
 
 ## 🏗️ Build Docker Image
