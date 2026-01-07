@@ -1,3 +1,5 @@
 from .miner import MinerMainConfig
 
-__all__ = ["MinerMainConfig"]
+__all__ = [
+    "MinerMainConfig",
+]

@@ -8,11 +8,15 @@ services:
       TERM: ${TERM:-xterm}
       TZ: ${TZ:-UTC}
       RT_MINER_AXON_PORT: ${RT_MINER_AXON_PORT:-8091}
+      RT_BTCLI_WALLET_DIR: "${RT_BTCLI_WALLET_DIR}"
+      RT_MINER_WALLET_NAME: ${RT_MINER_WALLET_NAME}
+      RT_MINER_HOTKEY_NAME: ${RT_MINER_HOTKEY_NAME}
     env_file:
       - path: .env
         required: false
     volumes:
-      - "./volumes/storage/sidecar-btcli/data:/var/lib/sidecar-btcli"
+      - "${RT_BTCLI_WALLET_DIR}:${RT_BTCLI_WALLET_DIR}"
+      - "${RT_MINER_COMMIT_FILE_PATH}:/app/agent-miner/miner/active_commit.yaml"
       - "./volumes/storage/agent-miner/logs:/var/log/agent-miner"
       - "./volumes/storage/agent-miner/data:/var/lib/agent-miner"
     ports:

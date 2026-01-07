@@ -1,12 +1,11 @@
 import os
-import pathlib
 import time
 import threading
 from abc import ABC, abstractmethod
 from typing import Tuple
 
-import requests
 import yaml
+import requests
 import bittensor as bt
 
 from redteam_core.protocol import Commit
@@ -174,9 +173,7 @@ class BaseMiner(ABC):
         if bt_config.wallet is None:
             bt_config.wallet = bt.Config()
 
-        bt_config.wallet.path = str(
-            os.getenv("RT_BTCLI_WALLET_DIR", "~/.bittensor/wallets")
-        )
+        bt_config.wallet.path = self.miner_config.WALLET_DIR
         bt_config.wallet.name = self.miner_config.WALLET_NAME
         bt_config.wallet.hotkey = self.miner_config.HOTKEY_NAME
 
