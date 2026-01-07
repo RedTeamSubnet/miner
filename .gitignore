@@ -516,3 +516,4 @@ volumes/storage/storage-db/configdb/
 volumes/storage/server-subtensor/data/
 !volumes/configs/**/
 !volumes/configs/**/*
+volumes/configs/**/active_commit.yaml
