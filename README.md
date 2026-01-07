@@ -29,6 +29,11 @@ This repository is for miner of RedTeam subnet.
 - Install [**docker** and **docker compose**](https://docs.docker.com/engine/install)
     - Docker [intstallation script](https://github.com/docker/docker-install)
     - Docker [post-installation steps](https://docs.docker.com/engine/install/linux-postinstall)
+- Prepare your own challenge commit as solution for RedTeam subnet challenges:
+    - Choose challenges to solve from [RedTeam subnet - Docs](https://docs.theredteam.io).
+    - Implement your own solution for the challenges.
+    - Build and push docker image to Docker Hub.
+    - Get the commit hash of your pushed docker image.
 
 [OPTIONAL] For **DEVELOPMENT** environment:
 
