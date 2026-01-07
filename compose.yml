@@ -16,7 +16,7 @@ services:
         required: false
     volumes:
       - "${RT_BTCLI_WALLET_DIR}:${RT_BTCLI_WALLET_DIR}"
-      - "${RT_MINER_COMMIT_FILE_PATH}:/app/agent-miner/miner/active_commit.yaml"
+      - "${RT_MINER_COMMIT_FILE_PATH}:/app/agent-miner/miner/config/active_commit.yaml"
       - "./volumes/storage/agent-miner/logs:/var/log/agent-miner"
       - "./volumes/storage/agent-miner/data:/var/lib/agent-miner"
     ports:

@@ -1,9 +1,9 @@
 import os
 import pathlib
-import yaml
 import pickle
 from typing import Tuple
 
+import yaml
 import bittensor as bt
 from redteam_core import Commit
 
@@ -52,7 +52,7 @@ class Miner(BaseMiner):
 
     def _load_active_commit(self) -> list:
         _current_path = pathlib.Path(__file__).parent.resolve()
-        commit_file = _current_path / "active_commit.yaml"
+        commit_file = _current_path / "config" / "active_commit.yaml"
         commits = yaml.load(open(commit_file), yaml.FullLoader)
         if commits is None:
             return []
