@@ -53,6 +53,7 @@ services:
       - sidecar-btcli
     environment:
       RT_BT_SUBTENSOR_NETWORK: "ws://subtensor:9944"
+      RT_BTCLI_DATA_DIR: "${RT_BTCLI_DATA_DIR:-/var/lib/sidecar-btcli}"
       RT_BTCLI_WALLET_DIR: "${RT_BTCLI_DATA_DIR:-/var/lib/sidecar-btcli}/wallets"
     volumes: !override
       - "./volumes/storage/sidecar-btcli/data:${RT_BTCLI_DATA_DIR:-/var/lib/sidecar-btcli}"
