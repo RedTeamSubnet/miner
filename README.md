@@ -35,11 +35,6 @@ This repository is for miner of RedTeam subnet. It is focused on running miner a
     - Build and push docker image to Docker Hub.
     - Get the commit hash of your pushed docker image.
 
-[OPTIONAL] For **DEVELOPMENT** environment:
-
-- Install [**git**](https://git-scm.com/downloads)
-- Setup an [**SSH key**](https://docs.github.com/en/github/authenticating-to-github/connecting-to-github-with-ssh)
-
 ---
 
 ### 2. 📥 Download or clone the repository
@@ -54,7 +49,7 @@ mkdir -pv ~/workspaces/projects
 cd ~/workspaces/projects
 ```
 
-**2.2.** Follow one of the below options **[A]**, **[B]** or **[C]**:
+**2.2.** Follow one of the below options **[A]** or **[B]**:
 
 **OPTION A.** Clone the repository:
 
@@ -63,14 +58,7 @@ git clone https://github.com/RedTeamSubnet/miner.git && \
     cd miner
 ```
 
-**OPTION B.** Clone the repository (for **DEVELOPMENT**: git + ssh key):
-
-```sh
-git clone git@github.com:RedTeamSubnet/miner.git && \
-    cd miner
-```
-
-**OPTION C.** Download source code:
+**OPTION B.** Download source code:
 
 1. Download archived **zip** or **tar.gz** file from [**releases**](https://github.com/RedTeamSubnet/miner/releases).
 2. Extract it into the projects directory.
@@ -98,7 +86,7 @@ nano ./volumes/configs/agent-miner/active_commit.yaml
 # Copy '.env.example' file to '.env' file:
 cp -v ./.env.example ./.env
 
-# Edit environment variables to fit in your environment:
+# Edit environment variables to fit in your environment
 nano ./.env
 ```
 
