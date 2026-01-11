@@ -1,6 +1,6 @@
 # RedTeam subnet - Miner (Agent)
 
-This repository is for miner of RedTeam subnet.
+This repository is for miner of RedTeam subnet. It is focused on running miner axon node for submitting challenge solutions to RedTeam subnet. For developing challenges please use dedicated repositories and separate machine to prevent submission stealing as your public ip is accessible in a [bittensor metagraph](https://taostats.io/subnets/61/metagraph).
 
 ## ✨ Features
 
@@ -18,14 +18,14 @@ This repository is for miner of RedTeam subnet.
 
 - Prepare miner wallet (skip if you already have one):
     - Install **Bittensor CLI**:
-        - <https://docs.learnbittensor.org/getting-started/install-btcli>
-        - <https://docs.learnbittensor.org/btcli>
+        - [Installing Bittensor CLI](https://docs.learnbittensor.org/getting-started/install-btcli)
+        - [Bittensor CLI: `btcli` Reference Document](https://docs.learnbittensor.org/btcli)
     - Create miner wallet:
-        - <https://docs.learnbittensor.org/keys/working-with-keys>
-        - <https://docs.learnbittensor.org/btcli/btcli-permissions>
+        - [Working with Keys](https://docs.learnbittensor.org/keys/working-with-keys)
+        - [Bittensor CLI Permissions](https://docs.learnbittensor.org/btcli/btcli-permissions)
     - Register miner wallet to RedTeam subnet:
-        - <https://docs.learnbittensor.org/miners>
-        - <https://docs.learnbittensor.org/miners/miners-btcli-guide>
+        - [Mining in Bittensor](https://docs.learnbittensor.org/miners)
+        - [Miner's Guide to `BTCLI`](https://docs.learnbittensor.org/miners/miners-btcli-guide)
 - Install [**docker** and **docker compose**](https://docs.docker.com/engine/install)
     - Docker [intstallation script](https://github.com/docker/docker-install)
     - Docker [post-installation steps](https://docs.docker.com/engine/install/linux-postinstall)
@@ -172,11 +172,9 @@ RT_MINER_AXON_PORT=8091
 [**`active_commit.yaml`**](./volumes/configs/agent-miner/active_commit.yaml):
 
 ```yaml
-# - text_detection---vietbeu/text-detection-miner@sha256:7be64b1a0b938951c6361195c58299540a21ff4ac8c34e5cc18bcae634e254b0
-# - webui_auto---asadbekk/rest.rt-wu-miner@sha256:b8cd274c0fbb4b30b98274465424025a8b0d070c9cca4e80e0d79f69f49a5c17
-- response_quality_adversarial_v2---bangbang123/response_quality_adversarial@sha256:a5fff733d574ae0c9c93d9029a7fc2aaaeeac07793fb6ef4683236579f1bf857
-- ada_detection_v1---vietbeu/response_quality_ranker@sha256:5b468ec48eae57907f1ba91de12bfe78f709351b0421e14a3b105dcb00844103
-- ab_sniffer_v5---asadbey/rest.rt-hb-v1-miner@sha256:f84f4d5a179908214121e071906357ddbfaee30fb6da2e896d404fc00acd20e3
+- ab_sniffer_v4---redteamsubnet61/template-ab_sniffer_v4@sha256:a5fff733d574ae0c9c93d9029a7fc2aaaeeac07793fb6ef4683236579f1bf857
+- ada_detection_v1---redteamsubnet61/template-ada_detection_v1@sha256:5b468ec48eae57907f1ba91de12bfe78f709351b0421e14a3b105dcb00844103
+- humanize_behaviou_v4---redteamsubnet61/template-humanize_behaviou_v4@sha256:f84f4d5a179908214121e071906357ddbfaee30fb6da2e896d404fc00acd20e3
 ```
 
 ## 🏗️ Build Docker Image
