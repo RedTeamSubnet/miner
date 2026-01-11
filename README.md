@@ -155,7 +155,7 @@ RT_MINER_AXON_PORT=8091
 # RT_MINER_DATA_DIR="/var/lib/agent-miner"
 ```
 
-### 🔧 Active commit file
+### 🔧 Template active commit file
 
 [**`active_commit.yaml`**](./volumes/configs/agent-miner/active_commit.yaml):
 
@@ -163,19 +163,6 @@ RT_MINER_AXON_PORT=8091
 - ab_sniffer_v4---redteamsubnet61/template-ab_sniffer_v4@sha256:a5fff733d574ae0c9c93d9029a7fc2aaaeeac07793fb6ef4683236579f1bf857
 - ada_detection_v1---redteamsubnet61/template-ada_detection_v1@sha256:5b468ec48eae57907f1ba91de12bfe78f709351b0421e14a3b105dcb00844103
 - humanize_behaviou_v4---redteamsubnet61/template-humanize_behaviou_v4@sha256:f84f4d5a179908214121e071906357ddbfaee30fb6da2e896d404fc00acd20e3
-```
-
-## 🏗️ Build Docker Image
-
-Before building the docker image, make sure you have installed **docker** and **docker compose**.
-
-To build the docker image, run the following command:
-
-```sh
-# Build docker image:
-./scripts/build.sh
-# Or:
-docker compose build
 ```
 
 ## 📚 Documentation
