@@ -4,6 +4,7 @@ services:
     build:
       context: .
     restart: unless-stopped
+    network_mode: bridge
     environment:
       TERM: ${TERM:-xterm}
       TZ: ${TZ:-UTC}
