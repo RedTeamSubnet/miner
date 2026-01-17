@@ -5,6 +5,7 @@ from typing import Tuple
 
 import yaml
 import bittensor as bt
+import redteam_core
 from redteam_core import Commit
 
 from ._base import BaseMiner
@@ -51,13 +52,28 @@ class Miner(BaseMiner):
             pickle.dump(self.synapse_commit, f)
 
     def _load_active_commit(self) -> list:
+
         _current_path = pathlib.Path(__file__).parent.resolve()
         commit_file = _current_path / "config" / "active_commit.yaml"
         commits = yaml.load(open(commit_file), yaml.FullLoader)
+
         if commits is None:
             return []
+
         valid_commits = self._check_format_commits(commits)
+
         return valid_commits
+
+    def _get_active_challenges(self) -> dict:
+        """Load active_challenges.yaml from redteam_core package"""
+
+        redteam_core_path = pathlib.Path(redteam_core.__file__).parent
+        yaml_file = redteam_core_path / "challenge_pool" / "active_challenges.yaml"
+        with open(yaml_file) as f:
+            active_challenges_yml = yaml.load(f, yaml.FullLoader)
+            active_challenges = list(active_challenges_yml.keys())
+        bt.logging.info(f"Active challenges: {active_challenges}")
+        return active_challenges
 
     def _check_format_commits(self, commits: list) -> list[str]:
         # Validate commit format
