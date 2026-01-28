@@ -6,6 +6,17 @@ hide:
 
 # 📌 Release Notes
 
+## v3.0.1-260128 (2026-01-28)
+
+<!-- Release notes generated using configuration in .github/release.yml at v3.0.1-260128 -->
+
+## What's Changed
+### 📦 Dependencies
+* fix: update requirements.txt dependency. by @bybatkhuu in https://github.com/RedTeamSubnet/miner/pull/3
+
+
+**Full Changelog**: https://github.com/RedTeamSubnet/miner/compare/v3.0.0-260117...v3.0.1-260128
+
 ## v3.0.0-260117 (2026-01-17)
 
 <!-- Release notes generated using configuration in .github/release.yml at v3.0.0-260117 -->
