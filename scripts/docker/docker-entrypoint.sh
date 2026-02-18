@@ -4,11 +4,14 @@ set -euo pipefail
 
 echo "[INFO]: Running '${RT_MINER_SLUG}' docker-entrypoint.sh..."
 
+_wallet_dir="${RT_BTCLI_WALLET_DIR:-${RT_BTCLI_DATA_DIR:-/var/lib/sidecar-btcli}/wallets}"
+
+
 _run()
 {
 	local _i=0
 	while true; do
-		if [ -d "${RT_BTCLI_WALLET_DIR:-${RT_BTCLI_DATA_DIR:-/var/lib/sidecar-btcli}/wallets}" ]; then
+		if [ -d "${_wallet_dir}" ]; then
 			break
 		fi
 
@@ -50,10 +53,21 @@ _run()
 	exit 0
 }
 
+_fix_wallet_parent_dirs()
+{
+	local _parent_dir="${_wallet_dir}"
+	while [ "${_parent_dir}" != "/" ]; do
+		sudo chmod -c 775 "${_parent_dir}" || exit 2
+		_parent_dir="$(dirname "${_parent_dir}")"
+	done
+}
+
 
 main()
 {
 	umask 0002 || exit 2
+
+	_fix_wallet_parent_dirs
 	find "${RT_HOME_DIR}" \
 		"${RT_MINER_CONFIGS_DIR}" \
 		"${RT_MINER_DATA_DIR}" \
