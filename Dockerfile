@@ -81,6 +81,7 @@ RUN --mount=type=secret,id=HASH_PASSWORD \
 	apt-get update --fix-missing -o Acquire::CompressionTypes::Order::=gz && \
 	apt-get install -y --no-install-recommends \
 		sudo \
+		gosu \
 		locales \
 		tzdata \
 		procps \
@@ -142,7 +143,7 @@ COPY --chown=${UID}:${GID} --chmod=770 ./scripts/docker/*.sh /usr/local/bin/
 
 # VOLUME ["${RT_MINER_DATA_DIR}"]
 
-USER ${UID}:${GID}
+# USER ${UID}:${GID}
 # EXPOSE ${RT_MINER_AXON_PORT}
 
 ENTRYPOINT ["docker-entrypoint.sh"]

@@ -48,7 +48,7 @@ _run()
 
 	sleep 9
 	echo "[INFO]: Starting ${RT_MINER_SLUG}..."
-	exec python -m miner
+	exec gosu "${USER}:${GROUP}" python -m miner || exit 2
 
 	exit 0
 }
@@ -117,7 +117,7 @@ main()
 	find "${RT_MINER_LOGS_DIR}" "${RT_MINER_TMP_DIR}" -type f -exec sudo chmod 664 {} + || exit 2
 	find "${RT_MINER_LOGS_DIR}" "${RT_MINER_TMP_DIR}" -type d -exec sudo chmod +s {} + || exit 2
 
-	echo "${USER} ALL=(ALL) ALL" | sudo tee -a "/etc/sudoers.d/${USER}" > /dev/null || exit 2
+	# echo "${USER} ALL=(ALL) ALL" | sudo tee -a "/etc/sudoers.d/${USER}" > /dev/null || exit 2
 	echo ""
 
 	## Parsing input:
