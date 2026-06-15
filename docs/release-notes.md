@@ -6,6 +6,14 @@ hide:
 
 # 📌 Release Notes
 
+## v3.1.4-260615 (2026-06-15)
+
+<!-- Release notes generated using configuration in .github/release.yml at v3.1.4-260615 -->
+
+
+
+**Full Changelog**: https://github.com/RedTeamSubnet/miner/compare/v3.1.3-260511...v3.1.4-260615
+
 ## v3.1.3-260511 (2026-05-11)
 
 <!-- Release notes generated using configuration in .github/release.yml at v3.1.3-260511 -->
