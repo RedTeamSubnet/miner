@@ -266,7 +266,7 @@ class BaseMiner(ABC):
         headers = self._get_miner_auth_headers(payload)
 
         try:
-            storage_url = str(self.config.STORAGE_URL).rstrip("/")
+            storage_url = str(self.config.STORAGE_API_URL).rstrip("/")
             url = f"{storage_url}/miner/docker-info"
             response = requests.post(url, json=payload, headers=headers, timeout=10)
             response.raise_for_status()
