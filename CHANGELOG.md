@@ -1,5 +1,13 @@
 # Changelog
 
+## v3.1.9-260717 (2026-07-17)
+
+<!-- Release notes generated using configuration in .github/release.yml at main -->
+
+
+
+**Full Changelog**: https://github.com/RedTeamSubnet/miner/compare/v3.1.4-260615...v3.1.9-260717
+
 ## v3.1.8-260713 (2026-07-13)
 
 <!-- Release notes generated using configuration in .github/release.yml at main -->
