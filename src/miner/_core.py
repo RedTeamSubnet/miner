@@ -62,7 +62,7 @@ class Miner(BaseMiner):
         if not os.path.exists(commit_file):
             bt.logging.critical(f"Active commit file not found at {commit_file}")
             sys.exit(1)
-        
+
         with open(commit_file, "r") as f:
             commits = yaml.load(f, yaml.FullLoader)
 
@@ -86,7 +86,9 @@ class Miner(BaseMiner):
             bt.logging.critical("No Docker Hub username found in active_commit.yaml")
             sys.exit(1)
         if len(usernames) > 1:
-            bt.logging.critical(f"Multiple Docker Hub usernames found: {usernames}. Only one allowed.")
+            bt.logging.critical(
+                f"Multiple Docker Hub usernames found: {usernames}. Only one allowed."
+            )
             sys.exit(1)
 
         return list(usernames)[0]
@@ -99,7 +101,9 @@ class Miner(BaseMiner):
     def _verify_commits_private(self, username: str):
         pat_path = self.miner_config.PAT_FILE_PATH
         if not os.path.exists(pat_path):
-            bt.logging.critical(f"PAT file not found at {pat_path}. Cannot verify repos.")
+            bt.logging.critical(
+                f"PAT file not found at {pat_path}. Cannot verify repos."
+            )
             sys.exit(1)
 
         with open(pat_path, "r") as f:
@@ -112,10 +116,12 @@ class Miner(BaseMiner):
             if "/" not in docker_id:
                 bt.logging.warning(f"Skipping commit with no repository path: {commit}")
                 continue
-            
+
             repo_name = docker_id.split("/")[1]
             if not self.is_dockerhub_repo_private(username, repo_name, pat):
-                bt.logging.critical(f"Repository {repo_name} is public! Only private repos allowed. Exiting.")
+                bt.logging.critical(
+                    f"Repository {repo_name} is public! Only private repos allowed. Exiting."
+                )
                 sys.exit(1)
 
         bt.logging.success("All commits are from private Docker Hub repositories.")

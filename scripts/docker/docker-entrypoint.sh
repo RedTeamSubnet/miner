@@ -48,6 +48,10 @@ _run()
 
 	sleep 9
 	echo "[INFO]: Starting ${RT_MINER_SLUG}..."
+	if [ "${RT_FIX_CYSCALE_DEPS:-false}" = "true" ]; then
+		echo "[INFO]: Repairing cyscale dependencies..."
+		python -m pip uninstall scalecodec -y || exit 2
+	fi
 	exec gosu "${USER}:${GROUP}" python -m miner || exit 2
 
 	exit 0
@@ -68,7 +72,8 @@ main()
 	umask 0002 || exit 2
 
 	_fix_wallet_parent_dirs
-	find "${RT_HOME_DIR}" \
+	find "${_wallet_dir}" \
+		"${RT_HOME_DIR}" \
 		"${RT_MINER_CONFIGS_DIR}" \
 		"${RT_MINER_DATA_DIR}" \
 		"${RT_MINER_LOGS_DIR}" \
