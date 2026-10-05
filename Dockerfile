@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # check=skip=SecretsUsedInArgOrEnv
 
-ARG PYTHON_VERSION=3.10
+ARG PYTHON_VERSION=3.11
 ARG BASE_IMAGE=python:${PYTHON_VERSION}-slim-trixie
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -48,7 +48,6 @@ ARG RT_MINER_DATA_DIR="/var/lib/${RT_MINER_SLUG}"
 ARG RT_MINER_LOGS_DIR="/var/log/${RT_MINER_SLUG}"
 ARG RT_MINER_TMP_DIR="/tmp/${RT_MINER_SLUG}"
 ARG RT_MINER_WALLET_DIR="/var/lib/sidecar-btcli/wallets"
-ARG RT_MINER_AXON_PORT=8091
 ## IMPORTANT!: Get hashed password from build-arg!
 ## echo "RT_MINER_PASSWORD123" | openssl passwd -6 -stdin
 ARG HASH_PASSWORD="\$6\$XxZ/TnkF4sofI6SM\$4nT08cDz/hu1Urzfxl3fT2BgLDweYtSVwEI7XCaYpI.KLOvzsvO3PAPzLPBje.lNwTOpZ2Y.MvYzNeRmqRgkc/"
@@ -65,7 +64,6 @@ ENV RT_MINER_SLUG="${RT_MINER_SLUG}" \
 	RT_MINER_LOGS_DIR="${RT_MINER_LOGS_DIR}" \
 	RT_MINER_TMP_DIR="${RT_MINER_TMP_DIR}" \
 	RT_MINER_WALLET_DIR="${RT_MINER_WALLET_DIR}" \
-	RT_MINER_AXON_PORT=${RT_MINER_AXON_PORT} \
 	UID=${UID} \
 	GID=${GID} \
 	USER=${USER} \
@@ -147,6 +145,5 @@ COPY --chown=${UID}:${GID} --chmod=770 ./scripts/docker/*.sh /usr/local/bin/
 # VOLUME ["${RT_MINER_DATA_DIR}"]
 
 # USER ${UID}:${GID}
-# EXPOSE ${RT_MINER_AXON_PORT}
 
 ENTRYPOINT ["docker-entrypoint.sh"]

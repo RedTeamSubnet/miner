@@ -1,282 +1,239 @@
-import os
-import sys
-import time
-import threading
-import hashlib
+from __future__ import annotations
+
+import base64
 import json
-from abc import ABC, abstractmethod
-from typing import Tuple
+from pathlib import Path
+import threading
+from typing import Any
+import logging
 
-import yaml
-import requests
 import bittensor as bt
-
-from redteam_core.protocol import Commit
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
+import requests
 from redteam_core import MainConfig
 
 from .config import MinerMainConfig
 
+logger = logging.getLogger(__name__)
 
-class BaseMiner(ABC):
+
+class CoreApiClient:
+    def __init__(
+        self,
+        base_url: str,
+        wallet: bt.Wallet,
+        *,
+        timeout: float = 10.0,
+        session: requests.Session | None = None,
+    ):
+        self.base_url = base_url.rstrip("/")
+        self.wallet = wallet
+        self.timeout = timeout
+        self.session = session or requests.Session()
+        self._access_token: str | None = None
+
+    @staticmethod
+    def _data(payload: Any) -> Any:
+        if isinstance(payload, dict) and "data" in payload:
+            return payload["data"]
+        return payload
+
+    def authenticate(self) -> None:
+        hotkey = self.wallet.hotkey.ss58_address
+        challenge_response = self.session.post(
+            f"{self.base_url}/auth/wallet/challenge",
+            json={"ss58_address": hotkey},
+            timeout=self.timeout,
+        )
+        challenge_response.raise_for_status()
+        challenge = self._data(challenge_response.json())
+        nonce = challenge.get("nonce") if isinstance(challenge, dict) else None
+        if not isinstance(nonce, str):
+            raise ValueError("Core API wallet challenge did not contain a nonce")
+
+        signature = self.wallet.hotkey.sign(nonce.encode()).hex()
+        verify_response = self.session.post(
+            f"{self.base_url}/auth/wallet/verify",
+            json={
+                "nonce": nonce,
+                "signature": signature,
+                "ss58_address": hotkey,
+            },
+            timeout=self.timeout,
+        )
+        verify_response.raise_for_status()
+        tokens = self._data(verify_response.json())
+        if not isinstance(tokens, dict) or not isinstance(
+            tokens.get("access_token"), str
+        ):
+            raise ValueError("Core API wallet verification returned no access token")
+        self._access_token = tokens["access_token"]
+
+    def _request(
+        self, method: str, path: str, *, retry_auth: bool = True, **kwargs: Any
+    ) -> dict[str, Any]:
+        if self._access_token is None:
+            self.authenticate()
+        headers = dict(kwargs.pop("headers", {}))
+        headers["Authorization"] = f"Bearer {self._access_token}"
+        response = self.session.request(
+            method,
+            f"{self.base_url}{path}",
+            headers=headers,
+            timeout=self.timeout,
+            **kwargs,
+        )
+        if response.status_code == 401 and retry_auth:
+            self._access_token = None
+            self.authenticate()
+            return self._request(method, path, retry_auth=False, **kwargs)
+        response.raise_for_status()
+        result = self._data(response.json())
+        if not isinstance(result, dict):
+            raise ValueError(f"Core API returned invalid data for {path}")
+        return result
+
+    def upsert_registry(self, username: str, pat: str) -> dict[str, Any]:
+        response = self.session.get(
+            f"{self.base_url}/miner-docker-registries/encryption-public-key",
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        try:
+            public_key = serialization.load_pem_public_key(response.content)
+        except ValueError as err:
+            raise ValueError(
+                "Core API returned an invalid registry public key"
+            ) from err
+        if not isinstance(public_key, rsa.RSAPublicKey):
+            raise ValueError("Core API registry public key is not RSA")
+        ciphertext = public_key.encrypt(
+            pat.encode(),
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None,
+            ),
+        )
+        return self._request(
+            "PUT",
+            "/miner-docker-registries/me",
+            json={
+                "registry_url": "https://registry-1.docker.io",
+                "username": username,
+                "encrypted_pat": base64.b64encode(ciphertext).decode(),
+            },
+        )
+
+    def submit_commit(self, challenge_name: str, cipher_commit: str) -> dict[str, Any]:
+        return self._request(
+            "POST",
+            "/commits/submit",
+            json={
+                "challenge_name": challenge_name,
+                "cipher_commit": cipher_commit,
+            },
+        )
+
+    def reveal_commit(self, commit_id: str, reveal_key: str) -> dict[str, Any]:
+        return self._request(
+            "POST",
+            f"/commits/{commit_id}/reveal",
+            json={"reveal_key": reveal_key},
+        )
+
+
+class SubmissionStore:
+    def __init__(self, path: str):
+        self.path = Path(path)
+        self.submission_path = self.path.with_suffix(
+            self.path.suffix + ".submissions.json"
+        )
+        self.entries: dict[str, dict[str, Any]] = {}
+        self.load()
+
+    def load(self) -> None:
+        if not self.submission_path.exists():
+            return
+        payload = json.loads(self.submission_path.read_text(encoding="utf-8"))
+        if not isinstance(payload.get("submissions"), dict):
+            raise ValueError(f"Invalid submission state file: {self.submission_path}")
+        self.entries = payload["submissions"]
+
+    def save(self) -> None:
+        self.submission_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with self.submission_path.open("w", encoding="utf-8") as f:
+            json.dump(
+                {"submissions": self.entries},
+                f,
+                sort_keys=True,
+            )
+
+
+class BaseMiner:
     def __init__(self):
         self.config = MainConfig()
-        self.miner_config: MinerMainConfig = MinerMainConfig()
+        self.miner_config = MinerMainConfig()
+        self._stop_event = threading.Event()
         self.setup_logging()
         self.setup_bittensor_objects()
-        self.axon.attach(self.forward, self.blacklist)
-        self.is_running = False
+        self.core_api = CoreApiClient(
+            self.miner_config.CORE_API_URL,
+            self.wallet,
+            timeout=self.miner_config.CORE_API_TIMEOUT,
+        )
 
-    def setup_logging(self):
+    def setup_logging(self) -> None:
         bt.logging.enable_default()
         bt.logging.enable_info()
         if self.config.BITTENSOR.LOGGING_LEVEL == "DEBUG":
             bt.logging.enable_debug()
         elif self.config.BITTENSOR.LOGGING_LEVEL == "TRACE":
             bt.logging.enable_trace()
-        bt.logging.info(
-            f"Running miner for subnet:  {self.config.BITTENSOR.SUBNET_NETUID} on network: {self.config.BITTENSOR.SUBTENSOR_NETWORK} with config:"
-        )
-        bt.logging.info(self.config.model_dump_json())
-
-    def setup_bittensor_objects(self):
-        bt.logging.info("Setting up Bittensor objects.")
-
-        bt_config = self._create_bittensor_config()
-
-        self.wallet = bt.Wallet(config=bt_config)
-        bt.logging.info(f"Wallet: {self.wallet}")
-
-        self.subtensor = bt.Subtensor(config=bt_config)
-        bt.logging.info(f"Subtensor: {self.subtensor}")
-
-        self.dendrite = bt.Dendrite(wallet=self.wallet)
-        bt.logging.info(f"Dendrite: {self.dendrite}")
-
-        self.metagraph = self.subtensor.metagraph(self.config.BITTENSOR.SUBNET_NETUID)
-        bt.logging.info(f"Metagraph: {self.metagraph}")
-
-        self.axon = bt.Axon(wallet=self.wallet, port=self.miner_config.AXON_PORT)
-        bt.logging.info(f"Axon: {self.axon}")
-
-        if self.wallet.hotkey.ss58_address not in self.metagraph.hotkeys:
-            bt.logging.error(
-                f"\nYour miner: {self.wallet} is not registered to chain connection: {self.subtensor} \nRun 'btcli register' and try again."
-            )
-            exit()
-        else:
-            self.my_subnet_uid = self.metagraph.hotkeys.index(
-                self.wallet.hotkey.ss58_address
-            )
-            bt.logging.info(f"Running miner on uid: {self.my_subnet_uid}")
-
-    def run(self):
-        # Check that miner is registered on the network.
-        self.metagraph.sync(subtensor=self.subtensor)
-        last_sync = time.time()
-
-        # Serve passes the axon information to the network + netuid we are hosting on.
-        # This will auto-update if the axon port of external ip have changed.
-        bt.logging.info(
-            f"Serving miner axon {self.axon} on network: {self.config.BITTENSOR.SUBTENSOR_NETWORK} with netuid: {self.config.BITTENSOR.SUBNET_NETUID}"
-        )
-        self.axon.serve(
-            netuid=self.config.BITTENSOR.SUBNET_NETUID, subtensor=self.subtensor
-        )
-
-        # Start  starts the miner's axon, making it active on the network.
-        self.axon.start()
-
-        while True:
-            RESYNC_INTERVAL = 600  # resync every 10 minutes
-            SLEEP_TIME = 30
-
-            try:
-                if time.time() - last_sync > RESYNC_INTERVAL:
-                    bt.logging.info("Resyncing metagraph...")
-                    self.metagraph.sync(subtensor=self.subtensor)
-                    bt.logging.info(
-                        f"Resynced metagraph Block: {self.metagraph.block.item()}"
-                    )
-                    last_sync = time.time()
-                time.sleep(SLEEP_TIME)
-
-            except KeyboardInterrupt:
-                self.axon.stop()
-                bt.logging.success("Miner killed by keyboard interrupt.")
-                break
-            except Exception as e:
-                bt.logging.error(f"Miner exception: {e}")
-
-    def run_in_background_thread(self):
-        """
-        Starts the miner's operations in a separate background thread.
-        This is useful for non-blocking operations.
-        """
-        if not self.is_running:
-            bt.logging.debug("Starting miner in background thread.")
-            self.should_exit = False
-            self.thread = threading.Thread(target=self.run, daemon=True)
-            self.thread.start()
-            self.is_running = True
-            bt.logging.debug("Started")
-
-    def stop_run_thread(self):
-        """
-        Stops the miner's operations that are running in the background thread.
-        """
-        if self.is_running:
-            bt.logging.debug("Stopping miner in background thread.")
-            self.should_exit = True
-            self.thread.join(5)
-            self.is_running = False
-            bt.logging.debug("Stopped")
-
-    def __enter__(self):
-        """
-        Starts the miner's operations in a background thread upon entering the context.
-        This method facilitates the use of the miner in a 'with' statement.
-        """
-        self.run_in_background_thread()
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        """
-        Stops the miner's background operations upon exiting the context.
-        This method facilitates the use of the miner in a 'with' statement.
-
-        Args:
-            exc_type: The type of the exception that caused the context to be exited.
-                      None if the context was exited without an exception.
-            exc_value: The instance of the exception that caused the context to be exited.
-                       None if the context was exited without an exception.
-            traceback: A traceback object encoding the stack trace.
-                       None if the context was exited without an exception.
-        """
-        self.stop_run_thread()
-
-    def _get_active_challenges(self):
-        active_challenges_path = "https://raw.githubusercontent.com/RedTeamSubnet/RedTeam/refs/heads/main/redteam_core/challenge_pool/active_challenges.yaml"
-        response = requests.get(active_challenges_path)
-        active_challenges = yaml.load(response.text, yaml.FullLoader)
-        active_challenges = list(active_challenges.keys())
-        bt.logging.info(f"Active challenges: {active_challenges}")
-        return active_challenges
 
     def _create_bittensor_config(self) -> bt.Config:
-        """
-        Create a Bittensor Config object from MainConfig.
-
-        Maps the hierarchical MainConfig structure to Bittensor's expected Config format.
-
-        Returns:
-            bt.Config: Bittensor configuration object
-        """
         bt_config = bt.Config()
-        # Set wallet configuration
         if bt_config.wallet is None:
             bt_config.wallet = bt.Config()
-
         bt_config.wallet.path = self.miner_config.WALLET_DIR
         bt_config.wallet.name = self.miner_config.WALLET_NAME
         bt_config.wallet.hotkey = self.miner_config.HOTKEY_NAME
-
         if bt_config.subtensor is None:
             bt_config.subtensor = bt.Config()
-        # Set subtensor configuration
         bt_config.subtensor.network = self.config.BITTENSOR.SUBTENSOR_NETWORK
-
-        # Set netuid (subnet configuration)
         bt_config.netuid = self.config.BITTENSOR.SUBNET_NETUID
-
+        logger.info(
+            f"Using Bittensor config: wallet={bt_config.wallet.path}/{bt_config.wallet.name}/{bt_config.wallet.hotkey}, "
+            f"subtensor.network={bt_config.subtensor.network}, netuid={bt_config.netuid}"
+        )
         return bt_config
 
-    def _get_miner_auth_headers(self, body: dict) -> dict:
-        timestamp = str(time.time_ns())
-        body_str = json.dumps(body)
-        body_hash = hashlib.sha256(body_str.encode("utf-8")).hexdigest()
+    def setup_bittensor_objects(self) -> None:
+        bt_config = self._create_bittensor_config()
+        self.wallet = bt.Wallet(config=bt_config)
+        self.subtensor = bt.Subtensor(config=bt_config)
+        self.metagraph = self.subtensor.metagraph(self.config.BITTENSOR.SUBNET_NETUID)
+        self._check_registration()
 
-        message = f"{body_hash}.{timestamp}"
-        signature = f"0x{self.wallet.hotkey.sign(message).hex()}"
-
-        return {
-            "miner-uid": str(self.my_subnet_uid),
-            "miner-hotkey": self.wallet.hotkey.ss58_address,
-            "timestamp": timestamp,
-            "signature": signature,
-            "Content-Type": "application/json",
-        }
-
-    def verify_docker_hub_credentials(self, username: str, pat: str) -> bool:
-        try:
-            response = requests.post(
-                "https://hub.docker.com/v2/users/login/",
-                json={"username": username, "password": pat},
-                timeout=10,
+    def _check_registration(self) -> None:
+        hotkey = self.wallet.hotkey.ss58_address
+        if hotkey not in self.metagraph.hotkeys:
+            raise RuntimeError(
+                f"Miner hotkey {hotkey} is not registered on subnet "
+                f"{self.config.BITTENSOR.SUBNET_NETUID}"
             )
-            if response.status_code == 200:
-                return True
+        self.my_subnet_uid = self.metagraph.hotkeys.index(hotkey)
 
-            bt.logging.error(f"Docker Hub verification failed: {response.status_code}")
-            return False
-        except Exception as e:
-            bt.logging.error(f"Error connecting to Docker Hub: {e}")
-            return False
+    def stop(self) -> None:
+        self._stop_event.set()
 
-    def is_dockerhub_repo_private(
-        self, username: str, repo_name: str, pat: str
-    ) -> bool:
-        try:
-            url = f"https://registry-1.docker.io/v2/{username}/{repo_name}/tags/list"
-            response = requests.get(url)
+    def __enter__(self):
+        return self
 
-            if response.status_code == 200:
-                return False
-            elif response.status_code == 401:
-                return True
-            elif response.status_code == 404:
-                return False
-            else:
-                bt.logging.error(
-                    f"Unexpected response from Docker Hub: {response.status_code}"
-                )
-                return False
-        except Exception as e:
-            bt.logging.error(f"Error checking repository visibility: {e}")
-            return False
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.stop()
 
-    def verify_and_sync_docker_info(self, username: str):
-        pat_path = self.miner_config.PAT_FILE_PATH
-        if not os.path.exists(pat_path):
-            bt.logging.critical(f"PAT file not found at {pat_path}. Cannot proceed.")
-            sys.exit(1)
 
-        with open(pat_path, "r") as f:
-            pat = f.read().strip()
-
-        bt.logging.info(f"Verifying PAT for Docker Hub user: {username}...")
-        if not self.verify_docker_hub_credentials(username, pat):
-            bt.logging.critical(
-                f"Docker Hub PAT verification failed for {username}. Exiting."
-            )
-            sys.exit(1)
-
-        bt.logging.success("Docker Hub PAT verified.")
-
-        payload = {"personal_access_token": pat, "dockerhub_username": username}
-        headers = self._get_miner_auth_headers(payload)
-
-        try:
-            storage_url = str(self.config.STORAGE_API_URL).rstrip("/")
-            url = f"{storage_url}/miner/docker-info"
-            response = requests.post(url, json=payload, headers=headers, timeout=10)
-            response.raise_for_status()
-            bt.logging.success("Docker info synced to storage successfully.")
-        except Exception as e:
-            bt.logging.critical(f"Failed to sync Docker info to storage: {e}")
-            sys.exit(1)
-
-    @abstractmethod
-    def forward(self, synapse: Commit) -> Commit: ...
-
-    @abstractmethod
-    def blacklist(self, synapse: Commit) -> Tuple[bool, str]: ...
+__all__ = ["BaseMiner", "CoreApiClient", "SubmissionStore"]

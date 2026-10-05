@@ -6,100 +6,62 @@ if sys.version_info >= (3, 11):
 else:
     from typing_extensions import Self
 
-from pydantic import Field, model_validator, field_validator, computed_field
+from pydantic import Field, model_validator
 from pydantic_settings import SettingsConfigDict
-
-from redteam_core.config import BaseConfig, ENV_PREFIX_MINER, ENV_PREFIX
+from redteam_core.config import BaseConfig, ENV_PREFIX_MINER
 
 
 class MinerMainConfig(BaseConfig):
     WALLET_DIR: str = Field(
         default="~/.bittensor/wallets",
         min_length=2,
-        description="Directory where wallets are stored",
+        validation_alias="RT_BTCLI_WALLET_DIR",
     )
-    WALLET_NAME: str = Field(
-        default="miner", description="Name of the wallet to use for mining."
+    WALLET_NAME: str = Field(default="miner", min_length=1)
+    HOTKEY_NAME: str = Field(default="default", min_length=1)
+    DATA_DIR: str = Field(default="/var/lib/agent-miner", min_length=1)
+    CONFIG_DIR: str = Field(default="/etc/agent-miner", min_length=1)
+    COMMIT_STORAGE_DIR: str = Field(default="{data_dir}/commits", min_length=3)
+    COMMIT_FILE_PATH: str | None = Field(
+        default="{config_dir}/active_commit.yaml", min_length=1
     )
-    HOTKEY_NAME: str = Field(
-        default="default", description="Name of the hotkey to use for mining."
+    PAT_FILE_PATH: str | None = Field(
+        default="{config_dir}/personal_access_token.txt", min_length=1
     )
-    AXON_PORT: int = Field(
-        default=8091,
-        description="Port on which the axon will listen for incoming connections.",
+    CORE_API_URL: str = Field(
+        default="https://api.theredteam.io/api/v1",
+        min_length=8,
     )
-    DATA_DIR: str = Field(
-        default="/var/lib/agent-miner",
-        min_length=1,
-        description="Path to store miner data.",
-    )
-    COMMIT_STORAGE_DIR: str = Field(
-        default="{data_dir}/commits",
-        min_length=3,
-        description="Path to store commit data for the miner.",
-    )
-    CONFIG_DIR: str = Field(
-        default="./volumes/configs/agent-miner",
-        min_length=1,
-        description="Directory containing miner configuration files (active_commit.yaml, personal_access_token.txt).",
-    )
-
-    @computed_field
-    @property
-    def PAT_FILE_PATH(self) -> str:
-        return os.path.join(self.CONFIG_DIR, "personal_access_token.txt")
-
-    @computed_field
-    @property
-    def ACTIVE_COMMIT_FILE(self) -> str:
-        return os.path.join(self.CONFIG_DIR, "active_commit.yaml")
-
-    @field_validator("WALLET_DIR")
-    @classmethod
-    def _check_wallet_dir(cls, val: str) -> str:
-
-        _wallet_dir_env = f"{ENV_PREFIX}BTCLI_WALLET_DIR"
-        if _wallet_dir_env in os.environ:
-            val = os.getenv(_wallet_dir_env, "")
-
-        if "~" in val:
-            val = os.path.expanduser(val)
-
-        return val
-
-    @field_validator("CONFIG_DIR")
-    @classmethod
-    def _check_config_dir(cls, val: str) -> str:
-        _config_dir_env = f"{ENV_PREFIX}MINER_CONFIG_DIR"
-        if _config_dir_env in os.environ:
-            val = os.getenv(_config_dir_env, "")
-
-        if "~" in val:
-            val = os.path.expanduser(val)
-        return val
+    CORE_API_TIMEOUT: float = Field(default=10.0, gt=0, le=120)
+    SYNC_INTERVAL: float = Field(default=30.0, gt=0, le=3600)
+    METAGRAPH_SYNC_INTERVAL: float = Field(default=600.0, gt=0, le=86400)
+    MAX_RETRY_DELAY: float = Field(default=300.0, gt=0, le=3600)
 
     @model_validator(mode="after")
-    def _check_all(self) -> Self:
-
-        if not os.path.isdir(self.DATA_DIR):
-            os.makedirs(self.DATA_DIR, exist_ok=True)
+    def _resolve_paths(self) -> Self:
+        self.WALLET_DIR = os.path.expanduser(self.WALLET_DIR)
+        self.DATA_DIR = os.path.expanduser(self.DATA_DIR)
+        self.CONFIG_DIR = os.path.expanduser(self.CONFIG_DIR)
 
         if "{data_dir}" in self.COMMIT_STORAGE_DIR:
             self.COMMIT_STORAGE_DIR = self.COMMIT_STORAGE_DIR.format(
                 data_dir=self.DATA_DIR
             )
+        if "{config_dir}" in self.COMMIT_FILE_PATH:
+            self.COMMIT_FILE_PATH = self.COMMIT_FILE_PATH.format(
+                config_dir=self.CONFIG_DIR
+            )
+        if "{config_dir}" in self.PAT_FILE_PATH:
+            self.PAT_FILE_PATH = self.PAT_FILE_PATH.format(config_dir=self.CONFIG_DIR)
 
-        if not os.path.isdir(self.COMMIT_STORAGE_DIR):
-            os.makedirs(self.COMMIT_STORAGE_DIR, exist_ok=True)
+        self.COMMIT_STORAGE_DIR = os.path.expanduser(self.COMMIT_STORAGE_DIR)
+        self.COMMIT_FILE_PATH = os.path.expanduser(self.COMMIT_FILE_PATH)
+        self.PAT_FILE_PATH = os.path.expanduser(self.PAT_FILE_PATH)
 
-        if not os.path.isdir(self.CONFIG_DIR):
-            os.makedirs(self.CONFIG_DIR, exist_ok=True)
-
+        self.CORE_API_URL = self.CORE_API_URL.rstrip("/")
         return self
 
-    model_config = SettingsConfigDict(env_prefix=ENV_PREFIX_MINER)
+    model_config = SettingsConfigDict(env_file=".env", env_prefix=ENV_PREFIX_MINER)
 
 
-__all__ = [
-    "MinerMainConfig",
-]
+__all__ = ["MinerMainConfig"]

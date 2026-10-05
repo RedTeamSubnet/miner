@@ -1,172 +1,237 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+import hashlib
 import os
-import sys
-import pathlib
-import pickle
-from typing import Tuple
+import re
+import time
 
-import yaml
 import bittensor as bt
-import redteam_core
-from redteam_core import Commit
+from cryptography.fernet import Fernet, InvalidToken
+import requests
+import yaml
 
-from ._base import BaseMiner
+from ._base import BaseMiner, SubmissionStore
+
+_COMMIT_RE = re.compile(
+    r"^(?P<challenge>.{2,64})---(?P<username>[A-Za-z0-9][A-Za-z0-9_.-]{0,127})/"
+    r"(?P<repository>[A-Za-z0-9][A-Za-z0-9_./-]{0,191})@sha256:"
+    r"(?P<digest>[0-9a-fA-F]{64})$"
+)
 
 
 class Miner(BaseMiner):
     def __init__(self):
         super().__init__()
-        self.active_challenges = self._get_active_challenges()
-        self.synapse_commit = self._load_synapse_commit()
-        self._verify_docker_info()
+        self.submissions = SubmissionStore(self.miner_config.COMMIT_STORAGE_DIR)
+        self._registry_fingerprint: str | None = None
+        self._last_metagraph_sync = time.monotonic()
 
-    def forward(self, synapse: Commit) -> Commit:
-        active_commits = self._load_active_commit()
-        served_commits = list(self.synapse_commit.commit_dockers.keys())
-        for commit in active_commits:
-            if commit not in served_commits:
-                self.synapse_commit.add_encrypted_commit(commit)
-        bt.logging.info(f"Synapse commit: {self.synapse_commit}")
-        self.synapse_commit.reveal_if_ready()
-        self._save_synapse_commit()
-        synapse_response = self.synapse_commit._hide_secret_info()
-        return synapse_response
+    def _load_active_commits(self) -> dict[str, str]:
+        path = self.miner_config.COMMIT_FILE_PATH
+        if not os.path.isfile(path):
+            raise ValueError(f"Active commit file not found: {path}")
+        with open(path, encoding="utf-8") as stream:
+            raw = yaml.safe_load(stream)
+        if raw is None:
+            return {}
+        if not isinstance(raw, list):
+            raise ValueError("active_commit.yaml must contain a list of commit strings")
 
-    def blacklist(self, synapse: Commit) -> Tuple[bool, str]:
-        hotkey = synapse.dendrite.hotkey
-        uid = self.metagraph.hotkeys.index(hotkey)
-        stake = self.metagraph.S[uid]
-        bt.logging.info(f"Validator with the hotkey {hotkey} is querying your node")
-        if stake < self.config.MIN_VALIDATOR_STAKE:
-            bt.logging.warning(
-                f"Validator with the hotkey {hotkey} has been blacklisted"
+        commits: dict[str, str] = {}
+        for value in raw:
+            if not isinstance(value, str):
+                raise ValueError("Every active commit must be a string")
+            match = _COMMIT_RE.fullmatch(value.strip())
+            if match is None:
+                raise ValueError(f"Invalid commit format: {value}")
+            challenge = match.group("challenge")
+            if challenge in commits:
+                raise ValueError(f"Duplicate challenge in active commits: {challenge}")
+            commits[challenge] = value.strip()
+        return commits
+
+    def _load_pat(self) -> str:
+        path = self.miner_config.PAT_FILE_PATH
+        if not os.path.isfile(path):
+            raise ValueError(f"PAT file not found: {path}")
+        with open(path, encoding="utf-8") as stream:
+            pat = stream.read().strip()
+        if not pat:
+            raise ValueError("Docker Hub PAT is empty")
+        return pat
+
+    @staticmethod
+    def _docker_username(commits: dict[str, str]) -> str:
+        usernames = {
+            _COMMIT_RE.fullmatch(commit).group("username")  # type: ignore[union-attr]
+            for commit in commits.values()
+        }
+        if not usernames:
+            raise ValueError("At least one active commit is required")
+        if len(usernames) != 1:
+            raise ValueError("All active commits must use one Docker Hub username")
+        return next(iter(usernames))
+
+    def _verify_docker_access(
+        self, username: str, pat: str, commits: dict[str, str]
+    ) -> None:
+        response = requests.post(
+            "https://hub.docker.com/v2/users/login/",
+            json={"username": username, "password": pat},
+            timeout=self.miner_config.CORE_API_TIMEOUT,
+        )
+        if response.status_code != 200:
+            raise ValueError(
+                f"Docker Hub PAT verification failed with status {response.status_code}"
             )
-            return True, "Not enough stake"
-        return False, "Passed"
-
-    def _load_synapse_commit(self) -> Commit:
-        commit_file = self.miner_config.COMMIT_STORAGE_DIR + "/commit.pkl"
-        if not os.path.exists(commit_file):
-            return Commit()
-        with open(commit_file, "rb") as f:
-            commit = pickle.load(f)
-        return commit
-
-    def _save_synapse_commit(self):
-        commit_file = self.miner_config.COMMIT_STORAGE_DIR + "/commit.pkl"
-        os.makedirs(self.miner_config.COMMIT_STORAGE_DIR, exist_ok=True)
-        with open(commit_file, "wb") as f:
-            pickle.dump(self.synapse_commit, f)
-
-    def _load_active_commit(self) -> list:
-        commit_file = self.miner_config.ACTIVE_COMMIT_FILE
-        if not os.path.exists(commit_file):
-            bt.logging.critical(f"Active commit file not found at {commit_file}")
-            sys.exit(1)
-
-        with open(commit_file, "r") as f:
-            commits = yaml.load(f, yaml.FullLoader)
-
-        if commits is None:
-            return []
-
-        valid_commits = self._check_format_commits(commits)
-
-        return valid_commits
-
-    def _extract_single_docker_username(self) -> str:
-        commits = self._load_active_commit()
-        usernames = set()
-        for commit in commits:
-            _, docker_info = commit.split("---")
-            docker_id, _ = docker_info.split("@sha256:")
-            if "/" in docker_id:
-                usernames.add(docker_id.split("/")[0])
-
-        if len(usernames) == 0:
-            bt.logging.critical("No Docker Hub username found in active_commit.yaml")
-            sys.exit(1)
-        if len(usernames) > 1:
-            bt.logging.critical(
-                f"Multiple Docker Hub usernames found: {usernames}. Only one allowed."
+        for commit in commits.values():
+            match = _COMMIT_RE.fullmatch(commit)
+            assert match is not None
+            repository = match.group("repository")
+            visibility = requests.get(
+                f"https://registry-1.docker.io/v2/{username}/{repository}/tags/list",
+                timeout=self.miner_config.CORE_API_TIMEOUT,
             )
-            sys.exit(1)
-
-        return list(usernames)[0]
-
-    def _verify_docker_info(self):
-        username = self._extract_single_docker_username()
-        self.verify_and_sync_docker_info(username)
-        self._verify_commits_private(username)
-
-    def _verify_commits_private(self, username: str):
-        pat_path = self.miner_config.PAT_FILE_PATH
-        if not os.path.exists(pat_path):
-            bt.logging.critical(
-                f"PAT file not found at {pat_path}. Cannot verify repos."
-            )
-            sys.exit(1)
-
-        with open(pat_path, "r") as f:
-            pat = f.read().strip()
-
-        commits = self._load_active_commit()
-        for commit in commits:
-            _, docker_info = commit.split("---")
-            docker_id, _ = docker_info.split("@sha256:")
-            if "/" not in docker_id:
-                bt.logging.warning(f"Skipping commit with no repository path: {commit}")
-                continue
-
-            repo_name = docker_id.split("/")[1]
-            if not self.is_dockerhub_repo_private(username, repo_name, pat):
-                bt.logging.critical(
-                    f"Repository {repo_name} is public! Only private repos allowed. Exiting."
+            if visibility.status_code == 200:
+                raise ValueError(f"Docker repository must be private: {repository}")
+            if visibility.status_code != 401:
+                raise ValueError(
+                    f"Could not verify Docker repository {repository}: "
+                    f"status {visibility.status_code}"
                 )
-                sys.exit(1)
 
-        bt.logging.success("All commits are from private Docker Hub repositories.")
+    def _sync_registry(self, username: str, pat: str, commits: dict[str, str]) -> None:
+        fingerprint = hashlib.sha256(
+            (f"{username}\0{pat}\0" + "\0".join(sorted(commits.values()))).encode()
+        ).hexdigest()
+        if fingerprint == self._registry_fingerprint:
+            return
+        self._verify_docker_access(username, pat, commits)
+        self.core_api.upsert_registry(username, pat)
+        self._registry_fingerprint = fingerprint
+        bt.logging.success("Docker registry credentials synced to Core API.")
 
-    def _get_active_challenges(self) -> dict:
-        """Load active_challenges.yaml from redteam_core package"""
+    def _new_pending(self, challenge: str, plain_commit: str) -> dict[str, str]:
+        key = Fernet.generate_key()
+        return {
+            "challenge_name": challenge,
+            "cipher_commit": Fernet(key).encrypt(plain_commit.encode()).decode(),
+            "reveal_key": key.decode(),
+        }
 
-        redteam_core_path = pathlib.Path(redteam_core.__file__).parent
-        yaml_file = redteam_core_path / "challenge_pool" / "active_challenges.yaml"
-        with open(yaml_file) as f:
-            active_challenges_yml = yaml.load(f, yaml.FullLoader)
-            active_challenges = list(active_challenges_yml.keys())
-        bt.logging.info(f"Active challenges: {active_challenges}")
-        return active_challenges
+    def _submit_current(self, commits: dict[str, str]) -> None:
+        for challenge, plain_commit in commits.items():
+            pending = self.submissions.entries.get(challenge)
+            pending_commit = None
+            if pending is not None:
+                try:
+                    pending_commit = (
+                        Fernet(pending["reveal_key"].encode())
+                        .decrypt(pending["cipher_commit"].encode())
+                        .decode()
+                    )
+                except (
+                    KeyError,
+                    TypeError,
+                    ValueError,
+                    InvalidToken,
+                    UnicodeDecodeError,
+                ):
+                    pass
+            if pending_commit != plain_commit:
+                pending = self._new_pending(challenge, plain_commit)
+                self.submissions.entries[challenge] = pending
+                self.submissions.save()
 
-    def _check_format_commits(self, commits: list) -> list[str]:
-        # Validate commit format
-        valid_commits = []
-        for commit in commits:
-            if not isinstance(commit, str):
-                bt.logging.warning(f"Invalid commit format (not a string): {commit}")
+            if pending.get("commit_id"):
                 continue
+            result = self.core_api.submit_commit(
+                challenge,
+                pending["cipher_commit"],
+            )
+            state = result["state"]
+            pending["commit_id"] = result["id"]
+            pending["state"] = state
+            pending["committed_at"] = result["committed_at"]
+            pending["reveal_at"] = result["reveal_at"]
+            self.submissions.save()
+            bt.logging.success(f"Submitted commit for challenge {challenge}.")
 
-            # Check if commit follows the format: challenge_name---dockerhub_id@sha256:hash
-            if not commit.count("---") == 1 or not commit.count("@sha256:") == 1:
-                bt.logging.warning(f"Invalid commit format: {commit}")
+    @staticmethod
+    def _parse_datetime(value: str) -> datetime:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed
+
+    def _reveal_due(self) -> None:
+        now = datetime.now(timezone.utc)
+        for challenge, pending in list(self.submissions.entries.items()):
+            commit_id = pending.get("commit_id")
+            reveal_at = pending.get("reveal_at")
+            if not isinstance(commit_id, str) or not isinstance(reveal_at, str):
                 continue
-
-            challenge_name, docker_info = commit.split("---")
-            docker_id, sha = docker_info.split("@sha256:")
-
-            if not challenge_name or not docker_id or not sha:
-                bt.logging.warning(f"Invalid commit format (missing parts): {commit}")
+            # State files written before state tracking have no ``state``.
+            # Treat them as committed so they can still be revealed once.
+            if pending.get("state", "COMMITTED") != "COMMITTED":
                 continue
+            _isnow = now < self._parse_datetime(reveal_at)
+            if _isnow:
+                continue
+            result = self.core_api.reveal_commit(commit_id, pending["reveal_key"])
+            pending["state"] = result["state"]
+            self.submissions.save()
+            if pending["state"] != "COMMITTED":
+                bt.logging.success(f"Revealed commit for challenge {challenge}.")
 
-            if challenge_name not in self.active_challenges:
-                bt.logging.warning(
-                    f"Invalid commit format (challenge not active): {commit}"
+    def sync_once(self) -> None:
+        commits = self._load_active_commits()
+        username = self._docker_username(commits)
+        pat = self._load_pat()
+        self._sync_registry(username, pat, commits)
+        self._submit_current(commits)
+        self._reveal_due()
+
+    def _sync_metagraph_if_due(self) -> None:
+        if (
+            time.monotonic() - self._last_metagraph_sync
+            < self.miner_config.METAGRAPH_SYNC_INTERVAL
+        ):
+            return
+        self.metagraph.sync(subtensor=self.subtensor)
+        self._check_registration()
+        self._last_metagraph_sync = time.monotonic()
+
+    def run(self) -> None:
+        # Fail fast on invalid local configuration before entering retry mode.
+        self._docker_username(self._load_active_commits())
+        self._load_pat()
+        retry_delay = self.miner_config.SYNC_INTERVAL
+        while not self._stop_event.is_set():
+            try:
+                self._sync_metagraph_if_due()
+                self.sync_once()
+                retry_delay = self.miner_config.SYNC_INTERVAL
+            except requests.HTTPError as err:
+                status = err.response.status_code if err.response is not None else None
+                detail = err.response.text if err.response is not None else str(err)
+                if status is not None and status < 500 and status not in {409, 429}:
+                    raise RuntimeError(
+                        f"Core API rejected request ({status}): {detail}"
+                    ) from err
+                bt.logging.error(f"Core API sync failed; retrying: {detail}")
+                retry_delay = min(
+                    max(self.miner_config.SYNC_INTERVAL, retry_delay * 2),
+                    self.miner_config.MAX_RETRY_DELAY,
                 )
-                continue
+            except requests.RequestException as err:
+                bt.logging.error(f"Network sync failed; retrying: {err}")
+                retry_delay = min(
+                    max(self.miner_config.SYNC_INTERVAL, retry_delay * 2),
+                    self.miner_config.MAX_RETRY_DELAY,
+                )
+            self._stop_event.wait(retry_delay)
 
-            valid_commits.append(commit)
-        return valid_commits
 
-
-__all__ = [
-    "Miner",
-]
+__all__ = ["Miner"]

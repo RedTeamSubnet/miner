@@ -9,7 +9,7 @@ services:
     environment:
       TERM: ${TERM:-xterm}
       TZ: ${TZ:-UTC}
-      RT_MINER_AXON_PORT: ${RT_MINER_AXON_PORT:-8091}
+      RT_MINER_CORE_API_URL: ${RT_MINER_CORE_API_URL:-https://api.theredteam.io/api/v1}
       RT_BTCLI_WALLET_DIR: "${RT_BTCLI_WALLET_DIR:?error}"
       RT_MINER_WALLET_NAME: ${RT_MINER_WALLET_NAME:?error}
       RT_MINER_HOTKEY_NAME: ${RT_MINER_HOTKEY_NAME:?error}
@@ -22,6 +22,4 @@ services:
       - "./volumes/configs/agent-miner:/app/agent-miner/config/"
       - "./volumes/storage/agent-miner/logs:/var/log/agent-miner"
       - "./volumes/storage/agent-miner/data:/var/lib/agent-miner"
-    ports:
-      - "${RT_MINER_AXON_PORT:-8091}:${RT_MINER_AXON_PORT:-8091}"
     tty: true

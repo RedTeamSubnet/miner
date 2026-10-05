@@ -1,6 +1,6 @@
 # RedTeam subnet - Miner (Agent)
 
-This repository is for miner of RedTeam subnet. It is focused on running miner axon node for submitting challenge solutions to RedTeam subnet. For developing challenges please use dedicated repositories and separate machine to prevent submission stealing as your public ip is accessible in a [bittensor metagraph](https://taostats.io/subnets/61/metagraph).
+This repository runs a RedTeam miner that authenticates its Bittensor wallet with Core API and submits encrypted challenge commits. For developing challenges please use dedicated repositories and separate machine to protect submissions.
 
 ## ✨ Features
 
@@ -164,7 +164,8 @@ RT_BTCLI_WALLET_DIR="${HOME}/.bittensor/wallets" # !!! CHANGE THIS TO REAL WALLE
 RT_MINER_COMMIT_FILE_PATH="./volumes/configs/agent-miner/active_commit.yaml" # !!! CHANGE THIS TO REAL COMMIT FILE PATH !!!
 RT_MINER_WALLET_NAME="miner" # !!! CHANGE THIS TO REAL MINER WALLET NAME !!!
 RT_MINER_HOTKEY_NAME="default" # !!! CHANGE THIS TO REAL MINER HOTKEY NAME !!!
-RT_MINER_AXON_PORT=8091
+RT_MINER_CORE_API_URL="https://api.theredteam.io/api/v1"
+# RT_MINER_SYNC_INTERVAL=30
 # RT_MINER_LOGS_DIR="/var/log/agent-miner"
 # RT_MINER_DATA_DIR="/var/lib/agent-miner"
 ```
