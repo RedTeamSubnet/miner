@@ -29,11 +29,11 @@ class MinerMainConfig(BaseConfig):
         default="{config_dir}/personal_access_token.txt", min_length=1
     )
     CORE_API_URL: str = Field(
-        default="https://api.theredteam.io/api/v1",
+        default="https://storage-api.theredteam.io/api/v1",
         min_length=8,
     )
     CORE_API_TIMEOUT: float = Field(default=10.0, gt=0, le=120)
-    SYNC_INTERVAL: float = Field(default=30.0, gt=0, le=3600)
+    SYNC_INTERVAL: float = Field(default=3600 * 24, gt=0, le=3600 * 24)
     METAGRAPH_SYNC_INTERVAL: float = Field(default=600.0, gt=0, le=86400)
     MAX_RETRY_DELAY: float = Field(default=300.0, gt=0, le=3600)
 
