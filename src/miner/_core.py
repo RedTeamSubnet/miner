@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import hashlib
 import os
 import re
 import time
 
 import bittensor as bt
-from cryptography.fernet import Fernet, InvalidToken
+from cryptography.fernet import Fernet
 import requests
 import yaml
 
@@ -117,28 +116,13 @@ class Miner(BaseMiner):
         return {
             "challenge_name": challenge,
             "cipher_commit": Fernet(key).encrypt(plain_commit.encode()).decode(),
-            "reveal_key": key.decode(),
+            "plain_commit": plain_commit,
         }
 
     def _submit_current(self, commits: dict[str, str]) -> None:
         for challenge, plain_commit in commits.items():
             pending = self.submissions.entries.get(challenge)
-            pending_commit = None
-            if pending is not None:
-                try:
-                    pending_commit = (
-                        Fernet(pending["reveal_key"].encode())
-                        .decrypt(pending["cipher_commit"].encode())
-                        .decode()
-                    )
-                except (
-                    KeyError,
-                    TypeError,
-                    ValueError,
-                    InvalidToken,
-                    UnicodeDecodeError,
-                ):
-                    pass
+            pending_commit = pending.get("plain_commit") if pending else None
             if pending_commit != plain_commit:
                 pending = self._new_pending(challenge, plain_commit)
                 self.submissions.entries[challenge] = pending
@@ -149,41 +133,14 @@ class Miner(BaseMiner):
             result = self.core_api.submit_commit(
                 challenge,
                 pending["cipher_commit"],
+                pending["plain_commit"],
             )
             state = result["state"]
             pending["commit_id"] = result["id"]
             pending["state"] = state
             pending["committed_at"] = result["committed_at"]
-            pending["reveal_at"] = result["reveal_at"]
             self.submissions.save()
             bt.logging.success(f"Submitted commit for challenge {challenge}.")
-
-    @staticmethod
-    def _parse_datetime(value: str) -> datetime:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-        if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=timezone.utc)
-        return parsed
-
-    def _reveal_due(self) -> None:
-        now = datetime.now(timezone.utc)
-        for challenge, pending in list(self.submissions.entries.items()):
-            commit_id = pending.get("commit_id")
-            reveal_at = pending.get("reveal_at")
-            if not isinstance(commit_id, str) or not isinstance(reveal_at, str):
-                continue
-            # State files written before state tracking have no ``state``.
-            # Treat them as committed so they can still be revealed once.
-            if pending.get("state", "COMMITTED") != "COMMITTED":
-                continue
-            _isnow = now < self._parse_datetime(reveal_at)
-            if _isnow:
-                continue
-            result = self.core_api.reveal_commit(commit_id, pending["reveal_key"])
-            pending["state"] = result["state"]
-            self.submissions.save()
-            if pending["state"] != "COMMITTED":
-                bt.logging.success(f"Revealed commit for challenge {challenge}.")
 
     def sync_once(self) -> None:
         commits = self._load_active_commits()
@@ -191,7 +148,6 @@ class Miner(BaseMiner):
         pat = self._load_pat()
         self._sync_registry(username, pat, commits)
         self._submit_current(commits)
-        self._reveal_due()
 
     def _sync_metagraph_if_due(self) -> None:
         if (
@@ -212,7 +168,8 @@ class Miner(BaseMiner):
             try:
                 self._sync_metagraph_if_due()
                 self.sync_once()
-                retry_delay = self.miner_config.SYNC_INTERVAL
+                bt.logging.success("All commits submitted; shutting down.")
+                self._stop_event.set()
             except requests.HTTPError as err:
                 status = err.response.status_code if err.response is not None else None
                 detail = err.response.text if err.response is not None else str(err)

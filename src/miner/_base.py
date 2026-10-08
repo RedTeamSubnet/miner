@@ -126,21 +126,17 @@ class CoreApiClient:
             },
         )
 
-    def submit_commit(self, challenge_name: str, cipher_commit: str) -> dict[str, Any]:
+    def submit_commit(
+        self, challenge_name: str, cipher_commit: str, plain_commit: str
+    ) -> dict[str, Any]:
         return self._request(
             "POST",
             "/commits/submit",
             json={
                 "challenge_name": challenge_name,
                 "cipher_commit": cipher_commit,
+                "plain_commit": plain_commit,
             },
-        )
-
-    def reveal_commit(self, commit_id: str, reveal_key: str) -> dict[str, Any]:
-        return self._request(
-            "POST",
-            f"/commits/{commit_id}/reveal",
-            json={"reveal_key": reveal_key},
         )
 
 

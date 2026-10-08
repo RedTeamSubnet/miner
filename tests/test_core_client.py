@@ -49,7 +49,6 @@ class _Session:
                 "expires_in": 900,
                 "scopes": [
                     "commits:submit",
-                    "commits:reveal",
                     "miner-docker-registries:upsert-own",
                 ],
             }
@@ -98,9 +97,9 @@ def test_wallet_auth_and_rsa_pat_encryption():
 def test_submission_store_is_private_and_round_trips(tmp_path):
     path = tmp_path / "submissions.json"
     store = SubmissionStore(str(path))
-    store.entries["challenge"] = {"reveal_key": "secret"}
+    store.entries["challenge"] = {"plain_commit": "secret"}
     store.save()
 
     assert path.stat().st_mode & 0o777 == 0o600
     loaded = SubmissionStore(str(path))
-    assert loaded.entries["challenge"]["reveal_key"] == "secret"
+    assert loaded.entries["challenge"]["plain_commit"] == "secret"
