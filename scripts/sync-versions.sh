@@ -27,7 +27,7 @@ fi
 ## --- Variables --- ##
 # Load from environment variables:
 VERSION_FILE_PATH="${VERSION_FILE_PATH:-./src/miner/__version__.py}"
-COMPOSE_FILE_PATH="${COMPOSE_FILE_PATH:-compose.yml}"
+COMPOSE_FILE_PATH="${COMPOSE_FILE_PATH:-./compose.yml}"
 SERVICE_NAME="${SERVICE_NAME:-agent-miner}"
 IMG_NAME="${IMG_NAME:-redteamsubnet61/agent-miner}"
 
@@ -91,6 +91,7 @@ fi
 ## --- Main --- ##
 main()
 {
+	local _current_version
 	_current_version="$(./scripts/get-version.sh)" || exit 2
 	echo "[INFO]: Synching '${SERVICE_NAME}' service image version to: '${IMG_NAME}:${_current_version}' ..."
 	yq -i ".services.${SERVICE_NAME}.image = \"${IMG_NAME}:${_current_version}\"" "${COMPOSE_FILE_PATH}"

@@ -16,6 +16,7 @@ cd "${_PROJECT_DIR}" || exit 2
 ## --- Variables --- ##
 # Flags:
 _IS_ALL=false
+_IS_VERBOSE=true
 ## --- Variables --- ##
 
 
@@ -25,11 +26,12 @@ _usage_help() {
 USAGE: ${0} [options]
 
 OPTIONS:
-    -a, --all     Enable all mode. Default: false
-    -h, --help    Show this help message.
+    -a, --all        Enable all mode. Default: false
+    -s, --silent     Enable silent mode. Default: false
+    -h, --help       Show this help message.
 
 EXAMPLES:
-    ${0} -a
+    ${0} -a -s
     ${0} --all
 EOF
 }
@@ -38,6 +40,9 @@ while [ $# -gt 0 ]; do
 	case "${1}" in
 		-a | --all)
 			_IS_ALL=true
+			shift;;
+		-s | --silent)
+			_IS_VERBOSE=false
 			shift;;
 		-h | --help)
 			_usage_help
@@ -54,15 +59,20 @@ done
 ## --- Main --- ##
 main()
 {
+	local _verbose_flag=""
+	if [ "${_IS_VERBOSE}" == true ]; then
+		_verbose_flag="-v"
+	fi
+
 	echo "[INFO]: Cleaning..."
 
-	find . -path "./volumes/storage" -prune -o -type f -name ".DS_Store" -print -exec rm -f {} + || exit 2
-	find . -path "./volumes/storage" -prune -o -type f -name ".Thumbs.db" -print -exec rm -f {} + || exit 2
-	find . -path "./volumes/storage" -prune -o -type f -name ".coverage*" -print -exec rm -f {} + || exit 2
+	find . -path "./volumes/storage" -prune -o -type f -name ".DS_Store" -print -exec rm -f ${_verbose_flag} {} + || exit 2
+	find . -path "./volumes/storage" -prune -o -type f -name ".Thumbs.db" -print -exec rm -f ${_verbose_flag} {} + || exit 2
+	find . -path "./volumes/storage" -prune -o -type f -name ".coverage*" -print -exec rm -f ${_verbose_flag} {} + || exit 2
 
-	find . -path "./volumes/storage" -prune -o -type d -name ".benchmarks" -exec rm -rfv {} + || exit 2
-	find . -path "./volumes/storage" -prune -o -type d -name ".pytest_cache" -exec rm -rfv {} + || exit 2
-	find . -path "./volumes/storage" -prune -o -type d -name "__pycache__" -exec rm -rfv {} + || exit 2
+	find . -path "./volumes/storage" -prune -o -type d -name ".benchmarks" -exec rm -rf ${_verbose_flag} {} + || exit 2
+	find . -path "./volumes/storage" -prune -o -type d -name ".pytest_cache" -exec rm -rf ${_verbose_flag} {} + || exit 2
+	find . -path "./volumes/storage" -prune -o -type d -name "__pycache__" -exec rm -rf ${_verbose_flag} {} + || exit 2
 
 
 	local _is_docker_running=false
@@ -72,7 +82,7 @@ main()
 
 	if [ "${_is_docker_running}" == true ]; then
 		if docker compose ps | grep 'Up' > /dev/null 2>&1; then
-			echo "[WARN]: Docker is running, please stop it before cleaning." >&2
+			echo "[WARN]: Docker container is running, please stop it before cleaning." >&2
 			exit 1
 		fi
 	fi
@@ -87,16 +97,18 @@ main()
 			sudo rm -rf ./volumes/.vscode-server/* || exit 2
 		}
 
-		find ./volumes/storage -type d -name "data" -exec rm -rfv {} + || {
-			sudo find ./volumes/storage -type d -name "data" -exec rm -rfv {} + || exit 2
+		rm -rf ${_verbose_flag} ./data || {
+			sudo rm -rf ${_verbose_flag} ./data || exit 2
+		}
+		find ./volumes/storage -type d -name "data" -exec rm -rf ${_verbose_flag} {} + || {
+			sudo find ./volumes/storage -type d -name "data" -exec rm -rf ${_verbose_flag} {} + || exit 2
 		}
 
-		find ./volumes/storage -type d -name "configdb" -exec rm -rfv {} + || {
-			sudo find ./volumes/storage -type d -name "configdb" -exec rm -rfv {} + || exit 2
+		rm -rf ${_verbose_flag} ./logs || {
+			sudo rm -rf ${_verbose_flag} ./logs || exit 2
 		}
-
-		find ./volumes/storage -type d -name "logs" -exec rm -rfv {} + || {
-			sudo find ./volumes/storage -type d -name "logs" -exec rm -rfv {} + || exit 2
+		find ./volumes/storage -type d -name "logs" -exec rm -rf ${_verbose_flag} {} + || {
+			sudo find ./volumes/storage -type d -name "logs" -exec rm -rf ${_verbose_flag} {} + || exit 2
 		}
 	fi
 
