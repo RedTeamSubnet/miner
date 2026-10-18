@@ -27,6 +27,11 @@ if ! docker compose > /dev/null 2>&1; then
 	echo "[ERROR]: 'docker compose' not found or not installed!" >&2
 	exit 1
 fi
+
+if [ ! -f ./scripts/get-version.sh ]; then
+	echo "[ERROR]: 'get-version.sh' script not found!" >&2
+	exit 1
+fi
 ## --- Base --- ##
 
 
